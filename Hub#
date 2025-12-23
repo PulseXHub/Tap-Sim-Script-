@@ -1,0 +1,133 @@
+-- Load Fluent library
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+-- Services
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Global storage for AutoClick remotes
+getgenv().AutoClick = getgenv().AutoClick or {}
+local scanningDone = false
+local loopEnabled = false
+
+-- Function to match the arguments
+local function matchArgs(args)
+    return (args[1] == true and args[3] == true)
+        or (args[1] == true and args[3] == false)
+end
+
+-- Hook Namecall to detect RemoteEvents with matching args
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    local callArgs = {...}
+
+    if not checkcaller() and method == "FireServer" and self:IsA("RemoteEvent") then
+        if matchArgs(callArgs) and self:IsDescendantOf(ReplicatedStorage) and not scanningDone then
+            getgenv().AutoClick[self] = callArgs
+            scanningDone = true
+            print("✅ Saved remote:", self:GetFullName())
+        end
+    end
+
+    return oldNamecall(self, ...)
+end)
+
+-- Loop to fire saved remotes every 0.001s when toggle is enabled
+task.spawn(function()
+    while true do
+        if loopEnabled then
+            for remote, args in pairs(getgenv().AutoClick) do
+                pcall(function()
+                    remote:FireServer(unpack(args))
+                end)
+            end
+        end
+        task.wait(0.001)
+    end
+end)
+
+-- Create Fluent Window
+local Window = Fluent:CreateWindow({
+    Title = "Fluent " .. Fluent.Version,
+    SubTitle = "by dawid",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+-- Tabs
+local Tabs = {
+    Main = Window:AddTab({ Title = "Main", Icon = "" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+}
+local Options = Fluent.Options
+
+do
+    Fluent:Notify({
+        Title = "Notification",
+        Content = "This is a notification",
+        SubContent = "SubContent",
+        Duration = 5
+    })
+
+    Tabs.Main:AddParagraph({
+        Title = "Paragraph",
+        Content = "This is a paragraph.\nSecond line!"
+    })
+
+    Tabs.Main:AddButton({
+        Title = "Button",
+        Description = "Very important button",
+        Callback = function()
+            Window:Dialog({
+                Title = "Title",
+                Content = "This is a dialog",
+                Buttons = {
+                    {Title = "Confirm", Callback = function() print("Confirmed the dialog.") end},
+                    {Title = "Cancel", Callback = function() print("Cancelled the dialog.") end}
+                }
+            })
+        end
+    })
+
+    -- Add AutoClick toggle
+    local AutoClickToggle = Tabs.Main:AddToggle("AutoClickToggle", {Title = "Enable AutoClick", Default = false})
+    AutoClickToggle:OnChanged(function(state)
+        loopEnabled = state
+        print("AutoClick", state and "Enabled" or "Disabled")
+    end)
+    Options.AutoClickToggle:SetValue(false)
+
+    -- Other Fluent elements (example toggles, sliders, dropdowns, etc.)
+    local Toggle = Tabs.Main:AddToggle("MyToggle", {Title = "Toggle", Default = false})
+    Toggle:OnChanged(function() print("Toggle changed:", Options.MyToggle.Value) end)
+    Options.MyToggle:SetValue(false)
+
+    local Slider = Tabs.Main:AddSlider("Slider", {Title = "Slider", Description = "This is a slider", Default = 2, Min = 0, Max = 5, Rounding = 1})
+    Slider:OnChanged(function(Value) print("Slider changed:", Value) end)
+    Slider:SetValue(3)
+end
+
+-- Addons
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+InterfaceManager:SetFolder("FluentScriptHub")
+SaveManager:SetFolder("FluentScriptHub/specific-game")
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+Window:SelectTab(1)
+
+Fluent:Notify({
+    Title = "Fluent",
+    Content = "The script has been loaded.",
+    Duration = 8
+})
+
+SaveManager:LoadAutoloadConfig()
